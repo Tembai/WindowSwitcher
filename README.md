@@ -1,6 +1,6 @@
 # WindowSwitcher
 
-A comprehensive AutoHotkey v2 script for enhanced Windows virtual desktop navigation and window management using mouse side buttons and keyboard shortcuts. Generated using AI, tested in usage manually.
+A comprehensive AutoHotkey v2 script for enhanced Windows virtual desktop navigation with i3-style visual desktop indicator, automatic window focusing, and intuitive mouse/keyboard controls. Generated using AI, tested in usage manually.
 
 Using [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAccessor).
 
@@ -20,11 +20,13 @@ Using [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAcce
 - `Alt + Win + Left/Right`: Move active window to adjacent desktop
 - `Win + Ctrl + 0`: Show desktop tracking status
 
+### Visual Interface
+- **Desktop indicator**: i3-style clickable desktop bar shows current desktop and allows direct navigation
+
 ### Smart Features
-- **Automatic window activation**: When switching desktops, the topmost window gets focus for immediate typing
+- **Automatic window activation**: Switches focus to the appropriate window when changing desktops
 - **Multi-monitor taskbar support**: Works on all monitors' taskbars
 - **Intelligent title bar detection**: Prevents button pass-through in browsers and modern apps
-- **Visual feedback**: Tooltips show which windows are being moved and desktop boundaries
 
 ## 🔧 Dependencies
 
@@ -46,17 +48,15 @@ Using [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAcce
 
 ## 🎮 Usage
 
-- Hover over any taskbar and use mouse side buttons to switch desktops
-- Hover over any window's title area and use mouse side buttons to move that window
-- Use keyboard shortcuts for direct desktop access and window management
-- Press both side buttons simultaneously anywhere to open Task View
+- **Mouse controls**: Use side buttons on taskbar to switch desktops or on title bars to move windows
+- **Desktop indicator**: Click any desktop number in the indicator bar to jump directly to that desktop
+- **Keyboard shortcuts**: Use Win + number keys for direct desktop access and window management
+- **Task View**: Press both side buttons simultaneously anywhere to open Task View
 
 ## 📝 Notes
 
-- **Multi-monitor aware**: Detects taskbars on all monitors
-- **Browser-friendly**: Prevents side button pass-through in Chrome, Firefox, Edge.
-- **Customizable detection areas**: Tuned for modern application UIs and browser tab areas
-- **Graceful fallbacks**: Works with or without VirtualDesktopAccessor.dll
+- **Multi-monitor aware**: Detects taskbars on all monitors but positions indicator only on the main screen
+- **Graceful fallbacks**: Works with or without VirtualDesktopAccessor.dll for maximum compatibility
 
 ## 🤖 Development
 
