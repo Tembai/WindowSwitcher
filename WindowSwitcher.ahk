@@ -648,66 +648,167 @@ SwitchDesktop(targetDesktop) {
 
 ; Activate the topmost visible window on current desktop
 ActivateTopmostWindow() {
+    global currentDesktop, hasVirtualDesktopAccessor
+    
     try {
-        ; Get the foreground window
-        hwnd := DllCall("GetForegroundWindow", "Ptr")
+        ; Give desktop switch time to complete
+        Sleep(150)
         
-        ; If no foreground window or it's the desktop, find a suitable window
-        if (!hwnd || WinGetClass("ahk_id " hwnd) = "Progman" || WinGetClass("ahk_id " hwnd) = "WorkerW") {
-            ; Get list of all windows
-            windows := WinGetList()
-            
-            for hwndTest in windows {
-                ; Skip if window is not visible
-                if (!IsWindow(hwndTest) || !WinExist("ahk_id " hwndTest)) {
-                    continue
-                }
+        ; Find windows that are actually on the current desktop
+        windowsOnCurrentDesktop := GetWindowsOnCurrentDesktop()
+        
+        if (windowsOnCurrentDesktop.Length = 0) {
+            ; No windows found on current desktop, try fallback
+            ActivateAnyVisibleWindow()
+            return
+        }
+        
+        ; Activate the first suitable window from current desktop
+        for hwnd in windowsOnCurrentDesktop {
+            try {
+                ; Get window properties
+                winClass := WinGetClass("ahk_id " hwnd)
+                winTitle := WinGetTitle("ahk_id " hwnd)
+                winState := WinGetMinMax("ahk_id " hwnd)
                 
-                ; Get window class and title
-                try {
-                    winClass := WinGetClass("ahk_id " hwndTest)
-                    winTitle := WinGetTitle("ahk_id " hwndTest)
-                } catch {
-                    continue
-                }
-                
-                ; Skip system windows, taskbar, etc.
+                ; Skip system windows and our indicator
                 if (winClass = "Shell_TrayWnd" || winClass = "Shell_SecondaryTrayWnd" || 
                     winClass = "Progman" || winClass = "WorkerW" || winClass = "DV2ControlHost" ||
-                    winTitle = "" || InStr(winClass, "Windows.UI.Core.CoreWindow")) {
+                    winTitle = "" || InStr(winClass, "Windows.UI.Core.CoreWindow") ||
+                    InStr(winTitle, "Desktop Indicator")) {
                     continue
                 }
                 
-                ; Check if window is actually visible (not minimized)
+                ; Skip minimized windows
+                if (winState = -1) {
+                    continue
+                }
+                
+                ; Activate this window aggressively
+                WinShow("ahk_id " hwnd)
+                
+                ; Only restore if the window is actually minimized
+                if (winState = -1) {
+                    WinRestore("ahk_id " hwnd)
+                }
+                
+                WinActivate("ahk_id " hwnd)
+                DllCall("SetForegroundWindow", "Ptr", hwnd)
+                return
+                
+            } catch {
+                continue
+            }
+        }
+        
+        ; If no suitable window found, try fallback
+        ActivateAnyVisibleWindow()
+        
+    } catch {
+        ActivateAnyVisibleWindow()
+    }
+}
+
+; Get windows that are actually on the current virtual desktop
+GetWindowsOnCurrentDesktop() {
+    global hasVirtualDesktopAccessor, currentDesktop
+    windowList := []
+    
+    try {
+        if (hasVirtualDesktopAccessor) {
+            ; Use VirtualDesktopAccessor.dll to get windows on current desktop
+            windows := WinGetList()
+            
+            for hwnd in windows {
                 try {
-                    winState := WinGetMinMax("ahk_id " hwndTest)
-                    if (winState = -1) {  ; Window is minimized
-                        continue
+                    ; Check if window is on current desktop using the DLL
+                    windowDesktop := DllCall("VirtualDesktopAccessor.dll\GetWindowDesktopNumber", "Ptr", hwnd, "Int")
+                    
+                    ; VirtualDesktopAccessor returns 0-based, we use 1-based
+                    if (windowDesktop + 1 = currentDesktop) {
+                        windowList.Push(hwnd)
                     }
                 } catch {
-                    continue
-                }
-                
-                ; Found a suitable window, activate it
-                try {
-                    WinActivate("ahk_id " hwndTest)
-                    WinWaitActive("ahk_id " hwndTest, , 1)  ; Wait up to 1 second
-                    return
-                } catch {
+                    ; If DLL call fails for this window, skip it
                     continue
                 }
             }
         } else {
-            ; Foreground window exists, just ensure it's properly activated
-            WinActivate("ahk_id " hwnd)
+            ; Fallback: Use visibility check (less reliable but better than nothing)
+            windows := WinGetList()
+            
+            for hwnd in windows {
+                try {
+                    ; Check if window is actually visible (rough desktop check)
+                    if (WinExist("ahk_id " hwnd) && IsWindowVisibleOnCurrentDesktop(hwnd)) {
+                        windowList.Push(hwnd)
+                    }
+                } catch {
+                    continue
+                }
+            }
         }
     } catch {
-        ; If all else fails, try to activate any visible window
-        try {
-            WinActivate("A")
-        } catch {
-            ; Do nothing if activation fails
+        ; If everything fails, return empty list
+    }
+    
+    return windowList
+}
+
+; Check if a window is visible on current desktop (fallback method)
+IsWindowVisibleOnCurrentDesktop(hwnd) {
+    try {
+        ; Get window position
+        if (!WinGetPos(&X, &Y, &Width, &Height, "ahk_id " hwnd)) {
+            return false
         }
+        
+        ; Check if window is actually visible (not hidden, not minimized)
+        winState := WinGetMinMax("ahk_id " hwnd)
+        if (winState = -1) {  ; Minimized
+            return false
+        }
+        
+        ; Check if window has reasonable size and position
+        if (Width < 50 || Height < 50) {
+            return false
+        }
+        
+        ; Try to get window from point to see if it's really visible
+        testHwnd := DllCall("WindowFromPoint", "Int64", (Y << 32) | (X & 0xFFFFFFFF), "Ptr")
+        return (testHwnd = hwnd || DllCall("GetParent", "Ptr", testHwnd) = hwnd)
+        
+    } catch {
+        return false
+    }
+}
+
+; Fallback function for when desktop-specific detection fails
+ActivateAnyVisibleWindow() {
+    try {
+        windows := WinGetList()
+        
+        for hwnd in windows {
+            try {
+                winClass := WinGetClass("ahk_id " hwnd)
+                winState := WinGetMinMax("ahk_id " hwnd)
+                
+                ; Skip system windows and minimized windows
+                if (winClass = "Shell_TrayWnd" || winClass = "Progman" || 
+                    winClass = "WorkerW" || winState = -1) {
+                    continue
+                }
+                
+                ; Try to activate any reasonable window
+                WinActivate("ahk_id " hwnd)
+                return
+                
+            } catch {
+                continue
+            }
+        }
+    } catch {
+        ; Do nothing if all fails
     }
 }
 
