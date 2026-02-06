@@ -2,6 +2,8 @@
 
 A comprehensive AutoHotkey v2 script for enhanced Windows virtual desktop navigation and window management using mouse side buttons and keyboard shortcuts. Generated using AI, tested in usage manually.
 
+Using [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAccessor).
+
 ## ✨ Features
 
 ### Mouse Controls
@@ -14,7 +16,7 @@ A comprehensive AutoHotkey v2 script for enhanced Windows virtual desktop naviga
 - `Win + 1-9`: Switch to specific desktop by number
 - `Win + Tab` / `Win + Shift + Tab`: Switch to next/previous desktop
 - `Win + Shift + 1-9`: Move active window to specific desktop (without switching view)
-- `Win + ` (backtick)` or `Ctrl + Win + Tab`: Open Task View
+- `Win + ` (backtick)` or `Ctrl + Win + Tab`: Open Task View (default Windows hotkey is Win + Tab)
 - `Alt + Win + Left/Right`: Move active window to adjacent desktop
 - `Win + Ctrl + 0`: Show desktop tracking status
 

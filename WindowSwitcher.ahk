@@ -28,27 +28,53 @@ global action_fired := false
 global currentDesktop := 0
 global hasVirtualDesktopAccessor := false
 
+; Desktop indicator GUI
+global desktopIndicatorGui := 0
+global desktopButtons := []            ; Array of desktop button objects
+global showPersistentIndicator := true  ; Set to false to disable persistent indicator
+global showSwitchTooltips := false     ; Set to false to disable switch tooltips
+
 ; Initialize VirtualDesktopAccessor.dll if available
 InitializeVirtualDesktopAccessor()
+
+; Create persistent desktop indicator
+if (showPersistentIndicator) {
+    CreateDesktopIndicator()
+}
+
+; Start monitoring for desktop count changes
+SetTimer(CheckDesktopCountChanges, 2000)  ; Check every 2 seconds
 
 ; Add a hotkey to reset desktop tracking if it gets out of sync
 ; Win+Ctrl+0 to reset desktop tracking and show current status
 #^0:: {
-    global currentDesktop, hasVirtualDesktopAccessor
+    global currentDesktop, hasVirtualDesktopAccessor, showPersistentIndicator, showSwitchTooltips
     
     if (hasVirtualDesktopAccessor) {
         ; Get accurate current desktop
         actualDesktop := GetCurrentDesktop()
         currentDesktop := actualDesktop
         desktopCount := GetDesktopCount()
-        ToolTip("VirtualDesktopAccessor active - Current desktop: " . actualDesktop . "/" . desktopCount)
+        
+        ; Update indicator
+        UpdateDesktopIndicator()
+        
+        statusText := "VirtualDesktopAccessor active - Desktop: " . actualDesktop . "/" . desktopCount
+        statusText .= "`nIndicator: " . (showPersistentIndicator ? "ON" : "OFF")
+        statusText .= " | Tooltips: " . (showSwitchTooltips ? "ON" : "OFF")
+        ToolTip(statusText)
     } else {
         ; Reset to unknown state
         currentDesktop := 0
-        ToolTip("VirtualDesktopAccessor not available - tracking reset")
+        UpdateDesktopIndicator()
+        
+        statusText := "VirtualDesktopAccessor not available - tracking reset"
+        statusText .= "`nIndicator: " . (showPersistentIndicator ? "ON" : "OFF")
+        statusText .= " | Tooltips: " . (showSwitchTooltips ? "ON" : "OFF")
+        ToolTip(statusText)
     }
     
-    SetTimer(() => ToolTip(), -3000)  ; Hide tooltip after 3 seconds
+    SetTimer(() => ToolTip(), -4000)  ; Hide tooltip after 4 seconds
 }
 
 ; ===================================================================
@@ -558,17 +584,34 @@ MoveWindowToDesktopNoSwitch(targetDesktop) {
 
 ; Simple desktop switching function
 SwitchDesktop(targetDesktop) {
-    global hasVirtualDesktopAccessor, currentDesktop
+    global hasVirtualDesktopAccessor, currentDesktop, showSwitchTooltips
     
     SyncDesktopTracking()
     
     if (hasVirtualDesktopAccessor && targetDesktop > 0 && targetDesktop <= 9) {
         try {
             DllCall("VirtualDesktopAccessor.dll\GoToDesktopNumber", "Int", targetDesktop - 1)
-            currentDesktop := targetDesktop
+            
+            ; Verify the switch was successful
+            Sleep(50)  ; Give switch time to complete
+            SyncDesktopTracking()  ; Update currentDesktop from actual desktop
+            
+            ; Update persistent indicator
+            UpdateDesktopIndicator()
+            
+            ; Check if we need to refresh indicator for new desktops
+            if (desktopButtons && targetDesktop > desktopButtons.Length) {
+                RefreshDesktopIndicator()
+            }
+            
+            ; Show switch feedback tooltip only if switch was successful
+            if (showSwitchTooltips && currentDesktop = targetDesktop) {
+                ToolTip("Desktop " . currentDesktop, , , 1)
+                SetTimer(() => ToolTip("", , , 1), -1500)
+            }
             
             ; Activate the topmost window on the new desktop
-            Sleep(100)  ; Give desktop switch time to complete
+            Sleep(50)
             ActivateTopmostWindow()
             return
         } catch {
@@ -583,10 +626,22 @@ SwitchDesktop(targetDesktop) {
             Send("#^{Right}")
             Sleep(30)
         }
+        Sleep(100)  ; Give switch time to complete
+        
+        ; Update tracking - for keyboard fallback, assume success
         currentDesktop := targetDesktop
         
+        ; Update persistent indicator
+        UpdateDesktopIndicator()
+        
+        ; Show switch feedback tooltip (keyboard fallback assumes success)
+        if (showSwitchTooltips) {
+            ToolTip("Desktop " . currentDesktop, , , 1)
+            SetTimer(() => ToolTip("", , , 1), -1500)
+        }
+        
         ; Activate the topmost window on the new desktop
-        Sleep(150)  ; Give desktop switch time to complete
+        Sleep(50)
         ActivateTopmostWindow()
     }
 }
@@ -681,13 +736,27 @@ InitializeVirtualDesktopAccessor() {
         ; No continuous monitoring - use event-based detection only
         ; This eliminates all background CPU usage
         
-        ToolTip("VirtualDesktopAccessor.dll loaded - Event-based detection active (zero CPU overhead)!")
+        ToolTip("WindowSwitcher tool loaded!")
         SetTimer(() => ToolTip(), -3000)
         
     } catch as e {
         hasVirtualDesktopAccessor := false
         ToolTip("VirtualDesktopAccessor.dll not found - using fallback method")
         SetTimer(() => ToolTip(), -3000)
+    }
+}
+
+; Disable Windows default virtual desktop notifications  
+DisableWindowsDesktopNotifications() {
+    try {
+        ; Simple registry-based approach (less aggressive)
+        RegWrite(0, "REG_DWORD", "HKEY_CURRENT_USER\Software\Microsoft\Windows\CurrentVersion\PushNotifications", "ToastEnabled")
+        
+        ; Note: The Windows popup is deeply integrated and may not be easily disabled
+        ; Focus on making our indicator more prominent instead
+        
+    } catch {
+        ; If setup fails, continue silently
     }
 }
 
@@ -852,4 +921,207 @@ MouseIsOverTitleBar() {
     standardTopHeight := isMaximized ? 100 : 120
     
     return (relY <= standardTopHeight)
+}
+
+; ===================================================================
+; DESKTOP INDICATOR FUNCTIONS
+; ===================================================================
+
+; Create persistent desktop indicator GUI
+CreateDesktopIndicator() {
+    global desktopIndicatorGui, currentDesktop, desktopButtons
+    
+    try {
+        ; Get actual desktop count to scale window properly
+        maxDesktops := GetDesktopCount()
+        if (maxDesktops <= 0) {
+            maxDesktops := 9  ; Show up to 9 desktops if count unavailable
+        }
+        ; Ensure we show at least as many as the current desktop
+        if (currentDesktop > maxDesktops) {
+            maxDesktops := currentDesktop
+        }
+        
+        ; Create GUI window for i3-style desktop indicator
+        desktopIndicatorGui := Gui("+AlwaysOnTop -MaximizeBox -MinimizeBox -SysMenu +ToolWindow -Caption +LastFound", "")
+        desktopIndicatorGui.BackColor := "0x2D2D30"  ; Dark mode gray like VS Code
+        desktopIndicatorGui.MarginX := 1
+        desktopIndicatorGui.MarginY := 1
+        
+        ; Create buttons for desktops (only for existing ones)
+        desktopButtons := []
+        buttonWidth := 28
+        buttonHeight := 26
+        spacing := 1
+        
+        Loop maxDesktops {
+            desktop := A_Index
+            xPos := (desktop - 1) * (buttonWidth + spacing)
+            
+            ; Create text control for this desktop (better color support than buttons)
+            btn := desktopIndicatorGui.Add("Text", 
+                "x" . xPos . " y0 w" . buttonWidth . " h" . buttonHeight . " Center +Border +0x200 Background0x3C3C3C cWhite", 
+                String(desktop))
+            btn.SetFont("s10 Bold", "Segoe UI")
+            
+            ; Store button reference with desktop number
+            desktopButtons.Push({button: btn, desktop: desktop})
+            
+            ; Store button reference with desktop number
+            desktopButtons.Push({button: btn, desktop: desktop})
+            
+            ; Set click event with simple function binding
+            btn.OnEvent("Click", DesktopButtonClick.Bind(desktop))
+        }
+        
+        ; Calculate total width based on actual number of desktops
+        totalWidth := maxDesktops * buttonWidth + (maxDesktops - 1) * spacing + 4  ; +4 for margins
+        
+        ; Position centered above the taskbar
+        posX := (A_ScreenWidth - totalWidth) // 2  ; Center horizontally
+        posY := A_ScreenHeight - 75  ; Above taskbar with some padding
+        
+        ; Show the GUI with proper sizing
+        desktopIndicatorGui.Show("x" . posX . " y" . posY . " w" . totalWidth . " h30 NoActivate")
+        
+        ; Set multiple window styles to ensure it stays on top
+        hwnd := desktopIndicatorGui.Hwnd
+        WinSetExStyle("+0x80000", "ahk_id " . hwnd)     ; WS_EX_LAYERED
+        WinSetExStyle("+0x8", "ahk_id " . hwnd)         ; WS_EX_TOPMOST  
+        WinSetExStyle("+0x80", "ahk_id " . hwnd)        ; WS_EX_TOOLWINDOW
+        
+        ; Force it to stay on top
+        WinSetAlwaysOnTop(1, "ahk_id " . hwnd)
+        
+        ; Initial update
+        UpdateDesktopIndicator()
+        
+    } catch {
+        ; If GUI creation fails, disable indicator silently
+        desktopIndicatorGui := 0
+    }
+}
+
+; Update the desktop indicator with current desktop number
+UpdateDesktopIndicator() {
+    global desktopIndicatorGui, currentDesktop, desktopButtons
+    
+    if (!desktopIndicatorGui || !desktopButtons) {
+        return
+    }
+    
+    try {
+        ; Update each text control's appearance with proper colors
+        Loop desktopButtons.Length {
+            btn := desktopButtons[A_Index].button
+            desktop := desktopButtons[A_Index].desktop
+            
+            ; Apply proper dark mode styling
+            if (desktop = currentDesktop) {
+                ; Current desktop - blue background
+                btn.Opt("Background0x0078D4 cWhite")
+                btn.Text := String(desktop)
+            } else {
+                ; Other desktops - dark background
+                btn.Opt("Background0x3C3C3C cWhite") 
+                btn.Text := String(desktop)
+            }
+        }
+    } catch {
+        ; If update fails, ignore silently
+    }
+}
+
+; Click handler for desktop buttons
+DesktopButtonClick(targetDesktop, *) {
+    ; Switch to the clicked desktop
+    SwitchDesktop(targetDesktop)
+}
+
+; Refresh desktop indicator when desktop count changes
+RefreshDesktopIndicator() {
+    global desktopIndicatorGui, showPersistentIndicator
+    
+    if (!showPersistentIndicator) {
+        return
+    }
+    
+    ; Destroy existing indicator
+    if (desktopIndicatorGui) {
+        try {
+            desktopIndicatorGui.Destroy()
+        } catch {
+            ; Ignore errors
+        }
+        desktopIndicatorGui := 0
+    }
+    
+    ; Create new indicator with updated desktop count (will auto-center)
+    CreateDesktopIndicator()
+}
+
+; Monitor for desktop count changes  
+CheckDesktopCountChanges() {
+    global desktopButtons, showPersistentIndicator
+    static lastDesktopCount := 0
+    
+    if (!showPersistentIndicator || !desktopButtons) {
+        return
+    }
+    
+    ; Get current desktop count
+    currentDesktopCount := GetDesktopCount()
+    if (currentDesktopCount <= 0) {
+        return
+    }
+    
+    ; Check if desktop count has changed
+    if (lastDesktopCount = 0) {
+        lastDesktopCount := currentDesktopCount
+        return
+    }
+    
+    if (currentDesktopCount != lastDesktopCount) {
+        ; Desktop count changed - refresh the indicator
+        lastDesktopCount := currentDesktopCount
+        RefreshDesktopIndicator()
+    }
+}
+
+; Toggle desktop indicator visibility
+ToggleDesktopIndicator() {
+    global desktopIndicatorGui, desktopButtons, showPersistentIndicator
+    
+    showPersistentIndicator := !showPersistentIndicator
+    
+    if (showPersistentIndicator) {
+        if (!desktopIndicatorGui) {
+            CreateDesktopIndicator()
+        } else {
+            try {
+                desktopIndicatorGui.Show("NoActivate")
+            } catch {
+                CreateDesktopIndicator()
+            }
+        }
+        ToolTip("Desktop indicator enabled")
+    } else {
+        if (desktopIndicatorGui) {
+            try {
+                desktopIndicatorGui.Hide()
+                ; Clear buttons array when hiding
+                desktopButtons := []
+            } catch {
+                ; Ignore if already hidden
+            }
+        }
+        ToolTip("Desktop indicator disabled")
+    }
+    
+    SetTimer(() => ToolTip(), -2000)
+}
+
+; Hotkey to toggle indicator: Win+Ctrl+I
+#^i:: {
+    ToggleDesktopIndicator()
 }
