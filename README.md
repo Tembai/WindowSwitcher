@@ -2,7 +2,10 @@
 
 A comprehensive AutoHotkey v2 script for enhanced Windows virtual desktop navigation with i3-style visual desktop indicator, automatic window focusing, and intuitive mouse/keyboard controls. Generated using AI, tested in usage manually.
 
+<img width="156" height="41" alt="image" src="https://github.com/user-attachments/assets/57042f91-6caa-41d2-b053-7240cd3223cc" />
+
 Using [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAccessor).
+
 
 ## ✨ Features
 
@@ -63,5 +66,6 @@ Using [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAcce
 This script was entirely developed using AI assistance (LLM-powered "vibe coding"). It represents an iterative approach to solving virtual desktop navigation pain points through conversational development.
 
 ## 📄 License
+
 
 Feel free to use, modify, and distribute this script as needed.
