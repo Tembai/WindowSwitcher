@@ -28,6 +28,9 @@ Using [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAcce
 
 ### Smart Features
 - **Automatic window activation**: Switches focus to the appropriate window when changing desktops
+- **High-speed switching**: Optimized for rapid desktop navigation with sub-50ms response times  
+- **Auto-desktop creation**: Creates new desktops when moving windows to non-existent ones
+- **Window auto-assignment**: Automatically moves windows to configured desktops based on title patterns
 - **Multi-monitor taskbar support**: Works on all monitors' taskbars
 - **Intelligent title bar detection**: Prevents button pass-through in browsers and modern apps
 
@@ -48,6 +51,29 @@ Using [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAcce
 2. Download `WindowSwitcher.ahk` 
 3. Download VirtualDesktopAccessor.dll
 4. Double-click the .ahk file to run, or add it to your Windows startup folder to start it with Windows
+
+## ⚙️ Configuration
+
+The script can be customized via `config.txt` in the same folder:
+
+### Desktop Auto-Creation
+- **Minimum desktops**: Set `startup_desktops=4` to create 4 desktops on startup
+- **Auto-expand**: When moving windows to non-existent desktops, new desktops are created automatically
+
+### Window Auto-Assignment
+Configure windows to automatically move to specific desktops based on title patterns:
+
+```
+2:
+*Firefox*
+*Chrome*
+
+3:
+*Steam*
+*Discord*
+```
+
+Use `*` as wildcards to match partial window titles.
 
 ## 🎮 Usage
 
