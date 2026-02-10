@@ -42,8 +42,8 @@ if (showPersistentIndicator) {
     CreateDesktopIndicator()
 }
 
-; Start monitoring for desktop count changes
-SetTimer(CheckDesktopCountChanges, 2000)  ; Check every 2 seconds
+; Start monitoring for desktop and indicator state changes
+SetTimer(PeriodicIndicatorCheck, 2000)  ; Check every 2 seconds
 
 ; Add a hotkey to reset desktop tracking if it gets out of sync
 ; Win+Ctrl+0 to reset desktop tracking and show current status
@@ -1162,30 +1162,50 @@ RefreshDesktopIndicator() {
 }
 
 ; Monitor for desktop count changes  
-CheckDesktopCountChanges() {
-    global desktopButtons, showPersistentIndicator
+; Unified periodic check for desktop state and indicator positioning
+PeriodicIndicatorCheck() {
+    global desktopButtons, showPersistentIndicator, desktopIndicatorGui, currentDesktop
     static lastDesktopCount := 0
     
-    if (!showPersistentIndicator || !desktopButtons) {
+    if (!showPersistentIndicator || !desktopButtons || !desktopIndicatorGui) {
         return
     }
     
-    ; Get current desktop count
-    currentDesktopCount := GetDesktopCount()
-    if (currentDesktopCount <= 0) {
-        return
-    }
-    
-    ; Check if desktop count has changed
-    if (lastDesktopCount = 0) {
-        lastDesktopCount := currentDesktopCount
-        return
-    }
-    
-    if (currentDesktopCount != lastDesktopCount) {
-        ; Desktop count changed - refresh the indicator
-        lastDesktopCount := currentDesktopCount
-        RefreshDesktopIndicator()
+    try {
+        ; Get current desktop count
+        currentDesktopCount := GetDesktopCount()
+        if (currentDesktopCount <= 0) {
+            return
+        }
+        
+        ; Check if desktop count has changed (both increases and decreases)
+        if (lastDesktopCount = 0) {
+            lastDesktopCount := currentDesktopCount
+        } else if (currentDesktopCount != lastDesktopCount) {
+            ; Desktop count changed - refresh and reposition the indicator
+            lastDesktopCount := currentDesktopCount
+            RefreshDesktopIndicator()
+        }
+        
+        ; Check if current active desktop has changed
+        realCurrentDesktop := GetCurrentDesktop()
+        if (realCurrentDesktop > 0 && realCurrentDesktop != currentDesktop) {
+            currentDesktop := realCurrentDesktop
+            UpdateDesktopIndicator()
+        }
+        
+        ; Ensure indicator stays on top
+        try {
+            ; Bring indicator to front without activating it
+            desktopIndicatorGui.Opt("+AlwaysOnTop")
+            ; Force it to the front one more time
+            WinSetAlwaysOnTop(true, "Desktop Indicator ahk_class AutoHotkeyGUI")
+        } catch {
+            ; Ignore any errors with top positioning
+        }
+        
+    } catch {
+        ; Ignore any errors during periodic check
     }
 }
 
