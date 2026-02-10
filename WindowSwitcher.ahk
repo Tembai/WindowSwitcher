@@ -611,26 +611,21 @@ SwitchDesktop(targetDesktop) {
         try {
             DllCall("VirtualDesktopAccessor.dll\GoToDesktopNumber", "Int", targetDesktop - 1)
             
-            ; Verify the switch was successful
-            Sleep(25)  ; Give switch time to complete
-            SyncDesktopTracking()  ; Update currentDesktop from actual desktop
+            ; Quick update of current desktop tracking
+            currentDesktop := targetDesktop
             
-            ; Update persistent indicator
-            UpdateDesktopIndicator()
+            ; Update persistent indicator asynchronously
+            SetTimer(() => UpdateDesktopIndicator(), -1)
             
-            ; Check if we need to refresh indicator for new desktops
+            ; Check if we need to refresh indicator for new desktops (async)
             if (desktopButtons && targetDesktop > desktopButtons.Length) {
-                RefreshDesktopIndicator()
+                SetTimer(() => RefreshDesktopIndicator(), -10)
             }
             
-            ; Show switch feedback tooltip only if switch was successful
-            if (showSwitchTooltips && currentDesktop = targetDesktop) {
-                ToolTip("Desktop " . currentDesktop, , , 1)
-                SetTimer(() => ToolTip("", , , 1), -1500)
-            }
+            ; Skip tooltips during rapid switching (they slow things down)
             
-            ; Activate the topmost window on the new desktop
-            ActivateTopmostWindow()
+            ; Activate the topmost window on the new desktop (async)
+            SetTimer(() => ActivateTopmostWindow(), -5)
             return
         } catch {
             hasVirtualDesktopAccessor := false
@@ -642,24 +637,20 @@ SwitchDesktop(targetDesktop) {
         Send("#^{Home}")  ; Go to first desktop
         Loop (targetDesktop - 1) {
             Send("#^{Right}")
-            Sleep(20)
+            Sleep(15)
         }
-        Sleep(50)  ; Give switch time to complete
+        Sleep(30)  ; Give switch time to complete
         
         ; Update tracking - for keyboard fallback, assume success
         currentDesktop := targetDesktop
         
-        ; Update persistent indicator
-        UpdateDesktopIndicator()
+        ; Update persistent indicator (async)
+        SetTimer(() => UpdateDesktopIndicator(), -1)
         
-        ; Show switch feedback tooltip (keyboard fallback assumes success)
-        if (showSwitchTooltips) {
-            ToolTip("Desktop " . currentDesktop, , , 1)
-            SetTimer(() => ToolTip("", , , 1), -1500)
-        }
+        ; Skip tooltips for faster switching
         
-        ; Activate the topmost window on the new desktop
-        ActivateTopmostWindow()
+        ; Activate the topmost window on the new desktop (async)
+        SetTimer(() => ActivateTopmostWindow(), -5)
     }
 }
 
