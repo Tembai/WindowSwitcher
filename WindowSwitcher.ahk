@@ -23,6 +23,7 @@
 global xbutton1_down := false
 global xbutton2_down := false
 global action_fired := false
+global switching_desktop := false  ; Mutex for desktop switches
 
 ; Track current desktop number - use 0 to indicate "unknown"
 global currentDesktop := 0
@@ -96,7 +97,7 @@ SetTimer(PeriodicIndicatorCheck, 2000)  ; Check every 2 seconds
     SyncDesktopTracking()
     
     if (hasVirtualDesktopAccessor) {
-        SwitchDesktop(currentDesktop + 1)
+        SafeSwitchDesktop(currentDesktop + 1)
     } else {
         Send("#^{Right}")
     }
@@ -108,22 +109,22 @@ SetTimer(PeriodicIndicatorCheck, 2000)  ; Check every 2 seconds
     SyncDesktopTracking()
     
     if (hasVirtualDesktopAccessor) {
-        SwitchDesktop(currentDesktop - 1)
+        SafeSwitchDesktop(currentDesktop - 1)
     } else {
         Send("#^{Left}")
     }
 }
 
-; Win+Number to switch to desktop by number
-#1:: SwitchDesktop(1)
-#2:: SwitchDesktop(2)
-#3:: SwitchDesktop(3)
-#4:: SwitchDesktop(4)
-#5:: SwitchDesktop(5)
-#6:: SwitchDesktop(6)
-#7:: SwitchDesktop(7)
-#8:: SwitchDesktop(8)
-#9:: SwitchDesktop(9)
+; Win+Number to switch to desktop by number (with debouncing)
+#1:: SafeSwitchDesktop(1)
+#2:: SafeSwitchDesktop(2)
+#3:: SafeSwitchDesktop(3)
+#4:: SafeSwitchDesktop(4)
+#5:: SafeSwitchDesktop(5)
+#6:: SafeSwitchDesktop(6)
+#7:: SafeSwitchDesktop(7)
+#8:: SafeSwitchDesktop(8)
+#9:: SafeSwitchDesktop(9)
 
 ; Win+Shift+Number to move active window to desktop without switching view
 #+1:: MoveWindowToDesktopNoSwitch(1)
@@ -178,7 +179,7 @@ XButton1:: {
             ToolTip("Already on last desktop (9)")
             SetTimer(() => ToolTip(), -1500)
         } else {
-            SwitchDesktop(targetDesktop)
+            SafeSwitchDesktop(targetDesktop)
         }
     }
     
@@ -207,7 +208,7 @@ XButton2:: {
             ToolTip("Already on first desktop")
             SetTimer(() => ToolTip(), -1500)
         } else {
-            SwitchDesktop(targetDesktop)
+            SafeSwitchDesktop(targetDesktop)
         }
     }
     
@@ -582,7 +583,25 @@ MoveWindowToDesktopNoSwitch(targetDesktop) {
     SetTimer(() => ToolTip(), -1500)
 }
 
-; Simple desktop switching function
+; Safe desktop switching with mutex protection
+SafeSwitchDesktop(targetDesktop) {
+    global switching_desktop
+    
+    ; Mutex check - prevent overlapping switches
+    if (switching_desktop) {
+        return ; Another switch is in progress
+    }
+    
+    switching_desktop := true
+    
+    try {
+        SwitchDesktop(targetDesktop)
+    } finally {
+        switching_desktop := false
+    }
+}
+
+; Desktop switching function (now protected by SafeSwitchDesktop)
 SwitchDesktop(targetDesktop) {
     global hasVirtualDesktopAccessor, currentDesktop, showSwitchTooltips
     
@@ -611,7 +630,6 @@ SwitchDesktop(targetDesktop) {
             }
             
             ; Activate the topmost window on the new desktop
-            Sleep(25)
             ActivateTopmostWindow()
             return
         } catch {
@@ -641,7 +659,6 @@ SwitchDesktop(targetDesktop) {
         }
         
         ; Activate the topmost window on the new desktop
-        Sleep(25)
         ActivateTopmostWindow()
     }
 }
@@ -651,9 +668,6 @@ ActivateTopmostWindow() {
     global currentDesktop, hasVirtualDesktopAccessor
     
     try {
-        ; Give desktop switch time to complete
-        Sleep(50)
-        
         ; Find windows that are actually on the current desktop
         windowsOnCurrentDesktop := GetWindowsOnCurrentDesktop()
         
@@ -1136,7 +1150,7 @@ UpdateDesktopIndicator() {
 ; Click handler for desktop buttons
 DesktopButtonClick(targetDesktop, *) {
     ; Switch to the clicked desktop
-    SwitchDesktop(targetDesktop)
+    SafeSwitchDesktop(targetDesktop)
 }
 
 ; Refresh desktop indicator when desktop count changes
