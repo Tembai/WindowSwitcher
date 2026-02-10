@@ -593,7 +593,7 @@ SwitchDesktop(targetDesktop) {
             DllCall("VirtualDesktopAccessor.dll\GoToDesktopNumber", "Int", targetDesktop - 1)
             
             ; Verify the switch was successful
-            Sleep(50)  ; Give switch time to complete
+            Sleep(25)  ; Give switch time to complete
             SyncDesktopTracking()  ; Update currentDesktop from actual desktop
             
             ; Update persistent indicator
@@ -611,7 +611,7 @@ SwitchDesktop(targetDesktop) {
             }
             
             ; Activate the topmost window on the new desktop
-            Sleep(50)
+            Sleep(25)
             ActivateTopmostWindow()
             return
         } catch {
@@ -624,9 +624,9 @@ SwitchDesktop(targetDesktop) {
         Send("#^{Home}")  ; Go to first desktop
         Loop (targetDesktop - 1) {
             Send("#^{Right}")
-            Sleep(30)
+            Sleep(20)
         }
-        Sleep(100)  ; Give switch time to complete
+        Sleep(50)  ; Give switch time to complete
         
         ; Update tracking - for keyboard fallback, assume success
         currentDesktop := targetDesktop
@@ -641,7 +641,7 @@ SwitchDesktop(targetDesktop) {
         }
         
         ; Activate the topmost window on the new desktop
-        Sleep(50)
+        Sleep(25)
         ActivateTopmostWindow()
     }
 }
@@ -652,7 +652,7 @@ ActivateTopmostWindow() {
     
     try {
         ; Give desktop switch time to complete
-        Sleep(150)
+        Sleep(50)
         
         ; Find windows that are actually on the current desktop
         windowsOnCurrentDesktop := GetWindowsOnCurrentDesktop()
