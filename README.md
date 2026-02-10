@@ -31,6 +31,7 @@ Using [VirtualDesktopAccessor.dll](https://github.com/Ciantic/VirtualDesktopAcce
 - **High-speed switching**: Optimized for rapid desktop navigation with sub-50ms response times  
 - **Auto-desktop creation**: Creates new desktops when moving windows to non-existent ones
 - **Window auto-assignment**: Automatically moves windows to configured desktops based on title patterns
+- **Visual notifications**: Shows tooltips when windows are automatically moved between desktops
 - **Multi-monitor taskbar support**: Works on all monitors' taskbars
 - **Intelligent title bar detection**: Prevents button pass-through in browsers and modern apps
 
@@ -73,7 +74,7 @@ Configure windows to automatically move to specific desktops based on title patt
 *Discord*
 ```
 
-Use `*` as wildcards to match partial window titles.
+Use `*` as wildcards to match partial window titles. When a window is automatically moved, a notification will appear showing which filter matched and where the window was moved.
 
 ## 🎮 Usage
 

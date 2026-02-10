@@ -46,6 +46,13 @@ This project exemplifies "vibe coding" - a development approach where:
 - **Bottleneck elimination**: Removed verification delays and tooltip interference during rapid switching
 - **Sub-50ms switching**: Achieved near-instantaneous desktop switching for power users
 
+### Configuration and Automation Features
+- **Configuration file system**: Added config.txt for user customization without code modification
+- **Window auto-assignment**: Implemented pattern-based automatic window organization
+- **Dynamic desktop creation**: Auto-expand desktop count when moving windows to non-existent desktops
+- **Visual feedback system**: Added notifications for automatic window movements
+- **Startup automation**: Configurable minimum desktop count for consistent workspace setup
+
 ## 🛠️ AI Assistant Capabilities Utilized
 
 ### Code Generation

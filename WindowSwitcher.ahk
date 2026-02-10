@@ -35,8 +35,14 @@ global desktopButtons := []            ; Array of desktop button objects
 global showPersistentIndicator := true  ; Set to false to disable persistent indicator
 global showSwitchTooltips := false     ; Set to false to disable switch tooltips
 
-; Initialize VirtualDesktopAccessor.dll if available
+; Configuration variables
+global startupDesktops := 4            ; Default minimum desktops
+global windowFilters := Map()          ; Window title filters for auto-desktop assignment
+
+; Initialize configuration, VDA, and desktop setup
+LoadConfiguration()
 InitializeVirtualDesktopAccessor()
+EnsureMinimumDesktops()
 
 ; Create persistent desktop indicator
 if (showPersistentIndicator) {
@@ -542,9 +548,15 @@ MoveWindowToDesktopNoSwitch(targetDesktop) {
         try {
             maxDesktops := GetDesktopCount()
             if (maxDesktops > 0 && targetDesktop > maxDesktops) {
-                ToolTip("Desktop " . targetDesktop . " does not exist")
-                SetTimer(() => ToolTip(), -1500)
-                return
+                ; Auto-create desktops if needed
+                if (CreateDesktopsUpTo(targetDesktop)) {
+                    ToolTip("Created desktop " . targetDesktop)
+                    SetTimer(() => ToolTip(), -1000)
+                } else {
+                    ToolTip("Could not create desktop " . targetDesktop)
+                    SetTimer(() => ToolTip(), -1500)
+                    return
+                }
             }
             
             ; Move window to target desktop using DLL (0-based index)
@@ -827,6 +839,174 @@ OpenTaskView() {
     Send("{LWin down}{Tab down}")
     Sleep(250)
     Send("{Tab up}{LWin up}")
+}
+
+; Load configuration from config.txt
+LoadConfiguration() {
+    global startupDesktops, windowFilters
+    
+    configPath := A_ScriptDir . "\config.txt"
+    
+    ; Set defaults
+    startupDesktops := 4
+    windowFilters := Map()
+    
+    if (!FileExist(configPath)) {
+        return ; Use defaults if config file doesn't exist
+    }
+    
+    try {
+        configContent := FileRead(configPath)
+        lines := StrSplit(configContent, "`n", "`r")
+        
+        currentDesktop := 0
+        
+        for index, line in lines {
+            line := Trim(line)
+            
+            ; Skip comments and empty lines
+            if (line = "" || SubStr(line, 1, 1) = "#") {
+                continue
+            }
+            
+            ; Check for startup_desktops setting
+            if (InStr(line, "startup_desktops=")) {
+                startupDesktops := Integer(StrReplace(line, "startup_desktops=", ""))
+                continue
+            }
+            
+            ; Check for desktop section headers (digit followed by colon)
+            if (RegExMatch(line, "^(\d+):$", &match)) {
+                currentDesktop := Integer(match[1])
+                if (!windowFilters.Has(currentDesktop)) {
+                    windowFilters[currentDesktop] := []
+                }
+                continue
+            }
+            
+            ; Add window filter for current desktop
+            if (currentDesktop > 0 && line != "") {
+                if (!windowFilters.Has(currentDesktop)) {
+                    windowFilters[currentDesktop] := []
+                }
+                windowFilters[currentDesktop].Push(line)
+            }
+        }
+    } catch {
+        ; If config reading fails, use defaults
+    }
+}
+
+; Helper function to move a specific window by HWND to a desktop
+MoveWindowToDesktopNumber(hwnd, targetDesktop) {
+    global hasVirtualDesktopAccessor
+    
+    if (!hasVirtualDesktopAccessor) {
+        return false
+    }
+    
+    try {
+        ; Ensure target desktop exists
+        CreateDesktopsUpTo(targetDesktop)
+        
+        ; Move window to target desktop using DLL (0-based index)
+        DllCall("VirtualDesktopAccessor.dll\MoveWindowToDesktopNumber", "Ptr", hwnd, "Int", targetDesktop - 1)
+        return true
+    } catch {
+        return false
+    }
+}
+
+; Helper function to check if an array contains a value
+HasValue(arr, value) {
+    for item in arr {
+        if (item = value) {
+            return true
+        }
+    }
+    return false
+}
+
+; Ensure minimum number of desktops exist
+EnsureMinimumDesktops() {
+    global startupDesktops, hasVirtualDesktopAccessor
+    
+    if (!hasVirtualDesktopAccessor) {
+        return ; Can't create desktops without DLL
+    }
+    
+    try {
+        currentCount := GetDesktopCount()
+        if (currentCount > 0 && currentCount < startupDesktops) {
+            ; Create additional desktops
+            Loop (startupDesktops - currentCount) {
+                DllCall("VirtualDesktopAccessor.dll\CreateDesktop")
+                Sleep(50) ; Give Windows time to create the desktop
+            }
+        }
+    } catch {
+        ; Ignore errors during desktop creation
+    }
+}
+
+; Create desktops up to target number if they don't exist
+CreateDesktopsUpTo(targetDesktop) {
+    global hasVirtualDesktopAccessor
+    
+    if (!hasVirtualDesktopAccessor) {
+        return false
+    }
+    
+    try {
+        currentCount := GetDesktopCount()
+        if (currentCount > 0 && currentCount < targetDesktop) {
+            Loop (targetDesktop - currentCount) {
+                DllCall("VirtualDesktopAccessor.dll\CreateDesktop")
+                Sleep(50) ; Give Windows time to create the desktop
+            }
+            return true
+        }
+    } catch {
+        return false
+    }
+    return false
+}
+
+; Check if window matches any filter for a desktop and auto-move it
+CheckWindowAutoMove(hwnd) {
+    global windowFilters
+    
+    if (windowFilters.Count = 0) {
+        return ; No filters configured
+    }
+    
+    try {
+        winTitle := WinGetTitle("ahk_id " . hwnd)
+        if (winTitle = "") {
+            return ; No title to match
+        }
+        
+        ; Check each desktop's filters
+        for desktop, filters in windowFilters {
+            for index, filter in filters {
+                ; Convert filter pattern to regex (replace * with .*)
+                regexPattern := StrReplace(filter, "*", ".*")
+                regexPattern := "^" . regexPattern . "$"
+                
+                if (RegExMatch(winTitle, regexPattern)) {
+                    ; Move window to this desktop
+                    if (MoveWindowToDesktopNumber(hwnd, desktop)) {
+                        ; Show notification when window is auto-moved
+                        ToolTip("Auto-moved '" . winTitle . "' to desktop " . desktop . " (matched: " . filter . ")")
+                        SetTimer(() => ToolTip(), -3000)  ; Show for 3 seconds
+                    }
+                    return
+                }
+            }
+        }
+    } catch {
+        ; Ignore errors in auto-move checking
+    }
 }
 
 ; Initialize VirtualDesktopAccessor.dll
@@ -1169,8 +1349,9 @@ RefreshDesktopIndicator() {
 ; Monitor for desktop count changes  
 ; Unified periodic check for desktop state and indicator positioning
 PeriodicIndicatorCheck() {
-    global desktopButtons, showPersistentIndicator, desktopIndicatorGui, currentDesktop
+    global desktopButtons, showPersistentIndicator, desktopIndicatorGui, currentDesktop, windowFilters
     static lastDesktopCount := 0
+    static lastWindowCheck := []
     
     if (!showPersistentIndicator || !desktopButtons || !desktopIndicatorGui) {
         return
@@ -1197,6 +1378,22 @@ PeriodicIndicatorCheck() {
         if (realCurrentDesktop > 0 && realCurrentDesktop != currentDesktop) {
             currentDesktop := realCurrentDesktop
             UpdateDesktopIndicator()
+        }
+        
+        ; Check for new windows that should be auto-moved (if filters are configured)
+        if (windowFilters.Count > 0) {
+            try {
+                currentWindows := WinGetList()
+                for hwnd in currentWindows {
+                    ; Check if this is a new window we haven't seen before
+                    if (!HasValue(lastWindowCheck, hwnd)) {
+                        CheckWindowAutoMove(hwnd)
+                    }
+                }
+                lastWindowCheck := currentWindows
+            } catch {
+                ; Ignore errors in window checking
+            }
         }
         
         ; Ensure indicator stays on top

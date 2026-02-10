@@ -1,0 +1,39 @@
+# WindowSwitcher Configuration File
+# Lines starting with # are comments and will be ignored
+
+# Number of desktops to create on startup (minimum)
+startup_desktops=4
+
+# Window filters - move windows matching these patterns to specific desktops
+# Format: desktop number followed by colon, then window title patterns (one per line)
+# Use * as wildcard for partial matches
+# Examples:
+#   *Firefox - matches any window with "Firefox" in the title
+#   Prive* - matches any window starting with "Prive"
+#   *Steam* - matches any window containing "Steam"
+
+1:
+
+2:
+*Firefox*
+*Chrome*
+*Edge*
+
+3:
+*Steam*
+*Discord*
+*Spotify*
+
+4:
+*Visual Studio Code*
+*Code*
+
+5:
+
+6:
+
+7:
+
+8:
+
+9:
