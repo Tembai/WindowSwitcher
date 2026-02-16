@@ -994,11 +994,26 @@ CheckWindowAutoMove(hwnd) {
                 regexPattern := "^" . regexPattern . "$"
                 
                 if (RegExMatch(winTitle, regexPattern)) {
-                    ; Move window to this desktop
-                    if (MoveWindowToDesktopNumber(hwnd, desktop)) {
-                        ; Show notification when window is auto-moved
-                        ToolTip("Auto-moved '" . winTitle . "' to desktop " . desktop . " (matched: " . filter . ")")
-                        SetTimer(() => ToolTip(), -3000)  ; Show for 3 seconds
+                    ; Check if window is already on the target desktop
+                    try {
+                        currentWindowDesktop := DllCall("VirtualDesktopAccessor.dll\GetWindowDesktopNumber", "Ptr", hwnd, "Int")
+                        ; VirtualDesktopAccessor returns 0-based, convert to 1-based for comparison
+                        currentWindowDesktop := currentWindowDesktop + 1
+                        
+                        ; Only move if window is not already on the target desktop
+                        if (currentWindowDesktop != desktop) {
+                            if (MoveWindowToDesktopNumber(hwnd, desktop)) {
+                                ; Show notification only when window is actually moved
+                                ToolTip("Auto-moved '" . winTitle . "' to desktop " . desktop . " (matched: " . filter . ")")
+                                SetTimer(() => ToolTip(), -3000)  ; Show for 3 seconds
+                            }
+                        }
+                    } catch {
+                        ; If we can't get current desktop, try to move anyway (fallback behavior)
+                        if (MoveWindowToDesktopNumber(hwnd, desktop)) {
+                            ToolTip("Auto-moved '" . winTitle . "' to desktop " . desktop . " (matched: " . filter . ")")
+                            SetTimer(() => ToolTip(), -3000)
+                        }
                     }
                     return
                 }
